@@ -1,162 +1,278 @@
-# Referral Client
+# Refer Me - Flutter Referral SDK
 
-Client SDK for your referral backend (short links, deep links, install confirmation).
+A comprehensive Flutter SDK for implementing referral systems with deep link handling, dependency injection, and cross-platform support.
 
-## Features
+## 🚀 Features
 
-- **Short Link Generation**: Create branded referral links for your users
-- **Android Install Referrer**: Deterministic post-install attribution via Play Store Install Referrer
-- **iOS Universal Links**: Installed-case deep link attribution via Universal Links
-- **Unified API**: Simple, consistent interface for both platforms
+- **🔗 Deep Link Handling**: Full app_links integration with parameter extraction
+- **💉 Dependency Injection**: Built-in DI with get_it for better testability
+- **📱 Cross-Platform**: iOS and Android support with Universal Links
+- **🔗 Short Link Generation**: Create branded referral links for your users
+- **📊 Install Attribution**: Post-install attribution via Play Store Install Referrer
+- **🎯 Campaign Tracking**: Advanced campaign and source tracking
+- **🧪 Testing Support**: Comprehensive testing utilities and mock services
+- **📚 Documentation**: Extensive guides and examples
 
-## Installation
+## 📦 Installation
 
 Add this package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  referral_client:
-    path: ../referral_client  # or git: https://github.com/your-repo/referral_client
+  refer_me: ^0.1.0
 ```
 
-## Quick Start
+## ⚡ Quick Start
 
-### 1. Initialize on App Boot
+### 1. Initialize with Dependency Injection
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:referral_client/refer_me.dart';
-
-late final ReferralClient referral;
+import 'package:refer_me/refer_me.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  referral = ReferralClient(
-    backendBaseUrl: 'https://api.yourdomain.com', // your REST base
-    androidPackage: 'com.yourapp',
-    appStoreId: '1234567890',
+  // Initialize dependency injection
+  await ReferralService.init(apiKey: 'your_api_key_here');
+  
+  final referralService = ReferralService.referralService;
+
+  // Start listening for deep links with full parameter access
+  referralService.startLinkListenerWithParameters((parameters) async {
+    print('Deep link received: $parameters');
+    
+    // Extract token and handle referral
+    final token = parameters['uid'] ?? 
+                  parameters['ref'] ?? 
+                  parameters['code'] ?? 
+                  parameters['token'] ?? 
+                  parameters['referral'];
+    
+    if (token != null) {
+      await referralService.confirmInstall(token: token);
+    }
+  });
+
+  // Check for initial link that launched the app
+  final initialLink = await referralService.getInitialLink();
+  if (initialLink != null) {
+    print('App launched via deep link: $initialLink');
+  }
+
+  // Check for install referrer
+  await referralService.confirmInstallIfPossible();
+
+  runApp(MyApp());
+}
+```
+
+### 2. Generate and Share Referral Links
+
+```dart
+class ReferralManager {
+  final IReferralService _referralService;
+
+  ReferralManager(this._referralService);
+
+  Future<void> shareReferralLink(String userId) async {
+    final shortLink = await _referralService.createShortLink(referrerId: userId);
+    
+    if (shortLink != null) {
+      print('Share this link: $shortLink');
+      // Use share_plus package to share the link
+      // await Share.share('Check out this app! $shortLink');
+    }
+  }
+}
+
+// Usage
+final manager = ReferralManager(ReferralService.referralService);
+await manager.shareReferralLink('USER123');
+```
+
+### 3. Advanced Deep Link Routing
+
+```dart
+class DeepLinkRouter {
+  final IReferralService _referralService;
+  
+  DeepLinkRouter(this._referralService);
+  
+  void startListening() {
+    _referralService.startLinkListenerWithParameters((parameters) async {
+      await routeDeepLink(parameters);
+    });
+  }
+  
+  Future<void> routeDeepLink(Map<String, String> parameters) async {
+    final path = parameters['path'];
+    final token = parameters['token'];
+    final campaign = parameters['campaign'];
+    
+    switch (path) {
+      case '/referral':
+        if (token != null) {
+          await _referralService.confirmInstall(token: token);
+        }
+        break;
+      case '/campaign':
+        print('Campaign: $campaign');
+        // Handle campaign tracking
+        break;
+      default:
+        print('Default handling: $parameters');
+    }
+  }
+}
+```
+
+## 🔗 Deep Link Examples
+
+### Referral Links
+```
+referme://referral?token=ABC123&source=email&campaign=winter2024
+https://yourdomain.com/referral?token=ABC123&source=email&campaign=winter2024
+```
+
+### Campaign Links
+```
+referme://campaign?id=winter2024&source=social&medium=facebook
+https://yourdomain.com/campaign?id=winter2024&source=social&medium=facebook
+```
+
+### Invite Links
+```
+referme://invite?code=INVITE456&inviter=user789&message=Join%20me!
+https://yourdomain.com/invite?code=INVITE456&inviter=user789&message=Join%20me!
+```
+
+## 🧪 Testing
+
+### Mock Service Setup
+
+```dart
+void setUp() async {
+  // Reset dependencies
+  await ReferralService.reset();
+  
+  // Register mock service
+  getIt.registerLazySingleton<IReferralService>(
+    () => MockReferralService(),
   );
+}
 
-  // 1) Start listening for in-app links (installed case)
-  referral.startLinkListener();
-
-  // 2) Try confirming via Android Install Referrer (post-install case)
-  await referral.confirmInstallIfPossible();
-
-  runApp(const MyApp());
+class MockReferralService implements IReferralService {
+  @override
+  Future<String?> createShortLink({required String referrerId}) async {
+    return 'https://test.com/ref/$referrerId';
+  }
+  
+  // ... implement other methods
 }
 ```
 
-### 2. Generate a Short Link to Share
+### Test Deep Links
 
 ```dart
-Future<void> shareMyReferral(String myUserIdOrCode) async {
-  final shortLink = await referral.createShortLink(referrerId: myUserIdOrCode);
-  // Present in UI / copy / share
-  debugPrint('Share this: $shortLink');
-}
+test('should handle deep link parameters', () async {
+  final parameters = {
+    'path': '/referral',
+    'token': 'TEST123',
+    'source': 'email',
+    'campaign': 'winter2024'
+  };
+  
+  await handleDeepLink(parameters);
+  
+  // Verify the behavior
+});
 ```
 
-### 3. Manual Confirmation (Optional)
+## 📚 Documentation
 
-```dart
-await referral.confirmInstall(token: 'someTokenYouCaptured');
-```
+- **[Dependency Injection Guide](DEPENDENCY_INJECTION_GUIDE.md)** - Complete DI setup and usage
+- **[App Links Guide](APP_LINKS_GUIDE.md)** - Deep link handling with app_links
+- **[Usage Examples](USAGE_EXAMPLES.md)** - Comprehensive usage examples
+- **[Troubleshooting](TROUBLESHOOTING.md)** - Common issues and solutions
 
-## Backend API Expectations
+## 🏗️ Architecture
 
-### POST /create-referral
+### Dependency Injection
+- **Service Locator Pattern**: Using get_it for dependency management
+- **Interface-based Design**: IReferralService for better testability
+- **Singleton Management**: Automatic lifecycle management
+- **Configuration Management**: Flexible API key and configuration setup
 
-**Request:**
-```json
-{
-  "referrerId": "USER123"
-}
-```
+### Deep Link Handling
+- **app_links Integration**: Universal deep link support
+- **Parameter Extraction**: Full access to all link parameters
+- **Initial Link Detection**: Handle links that launched the app
+- **Flexible Routing**: Custom routing based on paths and parameters
 
-**Response:**
-```json
-{
-  "shortLink": "https://go.yourapp.com/aB12xY"
-}
-```
+### Platform Support
+- **iOS**: Universal Links and custom URL schemes
+- **Android**: App Links and Play Store Install Referrer
+- **Cross-Platform**: Consistent API across platforms
 
-### GET /:shortId (click handler)
-
-Detect Android/iOS by User-Agent
-
-**Android redirect:**
-```
-https://play.google.com/store/apps/details?id=com.yourapp&referrer=uniqueId=<UUIDv4>
-```
-
-**iOS redirect:**
-Universal link or App Store (append `?ref=<token>` for installed-case deep link)
-
-**Record:**
-```json
-{
-  "shortId": "aB12xY",
-  "token": "unique per click",
-  "referrerId": "USER123",
-  "ip": "user_ip",
-  "ua": "user_agent",
-  "clickedAt": "timestamp"
-}
-```
-
-### POST /confirm-install
-
-**Request:**
-```json
-{
-  "referrerToken": "<token>",
-  "deviceId": "<idfv/androidId_fallback>"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "referralCode": "USER123"
-}
-```
-
-## Platform Setup
-
-### Android
-
-No extra setup needed for Install Referrer. Ensure your Play Store redirect uses a unique per-click token (UUID) in `&referrer=`.
-
-### iOS
-
-Set up Associated Domains + `apple-app-site-association` on your universal link domain so links like `https://links.yourdomain.com/r?uid=...` open the app when installed.
-
-## Package Structure
-
-```
-referral_client/
-├─ pubspec.yaml
-└─ lib/
-    ├─ referral_client.dart
-    └─ src/
-        ├─ referral_service.dart
-        ├─ android_install_referrer.dart
-        └─ link_listener.dart
-```
-
-## Dependencies
+## 📦 Dependencies
 
 - `http: ^1.2.2` - HTTP client for API calls
-- `install_referrer: ^1.1.2` - Android Play Install Referrer
-- `uni_links2: ^0.6.0` - Universal/App Links (iOS & Android)
-- `device_info_plus: ^11.0.0` - Lightweight device identifier
-- `crypto: ^3.0.3` - Hash util (optional)
+- `app_links: ^3.4.5` - Universal deep link handling
+- `device_info_plus: ^11.0.0` - Device identification
+- `get_it: ^7.6.7` - Dependency injection
+- `crypto: ^3.0.3` - Hash utilities
 - `meta: ^1.15.0` - Metadata annotations
 
-## License
+## 🔧 Platform Setup
 
-This project is licensed under the MIT License.
-# refer-me
+### iOS Configuration
+
+Add to `ios/Runner/Info.plist`:
+
+```xml
+<key>CFBundleURLTypes</key>
+<array>
+    <dict>
+        <key>CFBundleURLName</key>
+        <string>referme</string>
+        <key>CFBundleURLSchemes</key>
+        <array>
+            <string>referme</string>
+        </array>
+    </dict>
+</array>
+```
+
+### Android Configuration
+
+Add to `android/app/src/main/AndroidManifest.xml`:
+
+```xml
+<intent-filter android:autoVerify="true">
+    <action android:name="android.intent.action.VIEW" />
+    <category android:name="android.intent.category.DEFAULT" />
+    <category android:name="android.intent.category.BROWSABLE" />
+    <data android:scheme="referme" />
+</intent-filter>
+```
+
+## 🚀 Getting Started
+
+1. **Install the package**: Add `refer_me: ^0.1.0` to your `pubspec.yaml`
+2. **Initialize DI**: Call `ReferralService.init(apiKey: 'your_key')`
+3. **Setup deep links**: Configure platform-specific deep link handling
+4. **Start listening**: Use `startLinkListenerWithParameters()` for full control
+5. **Generate links**: Create referral links with `createShortLink()`
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📞 Support
+
+For support, please open an issue on GitHub or contact the maintainers.
