@@ -14,6 +14,8 @@ dependencies:
   # install_referrer: ^1.2.1      # Android Play Install Referrer - REMOVED due to Android compatibility issues
   app_links: ^3.4.5              # Universal/App Links (iOS & Android)
   device_info_plus: ^11.0.0     # Lightweight device identifier
+  package_info_plus: ^8.0.0     # App version info for user agent
+  network_info_plus: ^4.1.0     # Network information including IP address
   crypto: ^3.0.3                # Hash util (optional)
   meta: ^1.15.0
   get_it: ^7.6.7                # Dependency injection

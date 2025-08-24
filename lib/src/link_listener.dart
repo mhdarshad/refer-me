@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 
 /// Callback function type for handling deep link parameters
-typedef DeepLinkHandler = Future<void> Function(Map<String, String> parameters);
+typedef DeepLinkHandler = Future<void> Function(Map<String, dynamic>? parameters);
 
 /// Callback function type for handling token from deep links
 typedef TokenHandler = Future<void> Function(String token);
@@ -64,15 +64,10 @@ class LinkListener {
     listen((parameters) async {
       print(parameters);
       // Look for token in common parameter names
-      final token = parameters['uid'] ?? 
-                    parameters['ref'] ?? 
-                    parameters['code'] ?? 
-                    parameters['token'] ?? 
-                    parameters['referral'];
-      
-      if (token != null && token.isNotEmpty) {
-        await handler(token);
-      }
+
+      // Ensure parameters is Map<String, String> as required by handler
+      final shortId = parameters != null ? parameters['segment_0'] ?? '' : '';
+      await handler(shortId);
     });
   }
 

@@ -17,7 +17,10 @@ class DebugModeExample {
     // Start listening for deep links with debug logging
     referralService.startLinkListenerWithParameters((parameters) async {
       // Debug logging will show all the deep link processing
-      await _handleDeepLink(parameters);
+      if (parameters != null) {
+        final stringParams = Map<String, String>.from(parameters);
+        await _handleDeepLink(stringParams);
+      }
     });
     
     // Check for initial link with debug logging
@@ -44,7 +47,10 @@ class DebugModeExample {
     
     // Start listening for deep links (no debug logging)
     referralService.startLinkListenerWithParameters((parameters) async {
-      await _handleDeepLink(parameters);
+      if (parameters != null) {
+        final stringParams = Map<String, String>.from(parameters);
+        await _handleDeepLink(stringParams);
+      }
     });
     
     // Check for initial link (no debug logging)
@@ -64,16 +70,18 @@ class DebugModeExample {
       print('$key: $value');
     });
     
-    // Extract token
-    final token = parameters['uid'] ?? 
-                  parameters['ref'] ?? 
-                  parameters['code'] ?? 
-                  parameters['token'] ?? 
-                  parameters['referral'];
+    // Extract shortId from parameters
+    final shortId = parameters['uid'] ?? 
+                    parameters['ref'] ?? 
+                    parameters['code'] ?? 
+                    parameters['token'] ?? 
+                    parameters['referral'] ??
+                    parameters['segment_0'] ?? // New parameter from app_links
+                    '';
     
-    if (token != null) {
+    if (shortId.isNotEmpty) {
       final referralService = ReferralService.referralService;
-      await referralService.confirmInstall(token: token);
+      await referralService.confirmInstall(shortId: shortId);
     }
   }
 
@@ -104,8 +112,30 @@ class DebugModeExample {
     // Test 3: Manual install confirmation (will show debug logs)
     print('\n--- Test 3: Manual Install Confirmation ---');
     try {
-      final result = await referralService.confirmInstall(token: 'TEST_TOKEN_123');
+      final result = await referralService.confirmInstall(shortId: 'TEST_TOKEN_123');
       print('Manual confirmation result: $result');
+    } catch (e) {
+      print('Error: $e');
+    }
+    
+    // Test 4: User agent generation (will show debug logs)
+    print('\n--- Test 4: User Agent Generation ---');
+    try {
+      final userAgent = await referralService.getUserAgent();
+      print('Generated user agent: $userAgent');
+    } catch (e) {
+      print('Error: $e');
+    }
+    
+    // Test 5: Private IP address (will show debug logs)
+    print('\n--- Test 5: Private IP Address ---');
+    try {
+      final ipAddress = await referralService.getPrivateIpAddress();
+      if (ipAddress != null) {
+        print('Generated IP address: $ipAddress');
+      } else {
+        print('No IP address available');
+      }
     } catch (e) {
       print('Error: $e');
     }
@@ -167,7 +197,10 @@ class DebugModeExample {
     
     // Start services
     referralService.startLinkListenerWithParameters((parameters) async {
-      await _handleDeepLink(parameters);
+      if (parameters != null) {
+        final stringParams = Map<String, String>.from(parameters);
+        await _handleDeepLink(stringParams);
+      }
     });
     
     await referralService.confirmInstallIfPossible();
@@ -193,7 +226,10 @@ class DebugModeExample {
     
     // Start services
     referralService.startLinkListenerWithParameters((parameters) async {
-      await _handleDeepLink(parameters);
+      if (parameters != null) {
+        final stringParams = Map<String, String>.from(parameters);
+        await _handleDeepLink(stringParams);
+      }
     });
     
     await referralService.confirmInstallIfPossible();

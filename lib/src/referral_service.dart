@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:network_info_plus/network_info_plus.dart';
 import 'package:meta/meta.dart';
 
 import 'android_install_referrer.dart';
@@ -15,9 +17,11 @@ abstract class IReferralService {
   void startLinkListenerWithParameters(DeepLinkHandler handler);
   Future<void> stopLinkListener();
   Future<Map<String, dynamic>?> confirmInstallIfPossible();
-  Future<Map<String, dynamic>?> confirmInstall({required String token});
+  Future<Map<String, dynamic>?> confirmInstall({required String shortId});
   Future<Map<String, String>?> getInitialLink();
   Future<String?> getInitialToken();
+  Future<String> getUserAgent();
+  Future<String?> getPrivateIpAddress();
 }
 
 /// High-level API your app will call.
@@ -40,8 +44,26 @@ class ReferralClient implements IReferralService {
     _debugLog('📡 Backend URL: $backendBaseUrl/api/referrals');
     
     final uri = Uri.parse('$backendBaseUrl/api/referrals');
-    final headers = {'Content-Type': 'application/json', 'X-API-Key': key};
-    final body = jsonEncode({'referrerId': referrerId});
+    final userAgent = await _getChromeStyleUserAgent();
+    final ipAddress = await _getPrivateIpAddress();
+    
+    final headers = {
+      'Content-Type': 'application/json', 
+      'X-API-Key': key,
+      'User-Agent': userAgent,
+    };
+    
+    final bodyData = <String, dynamic>{
+      'referrerId': referrerId,
+    };
+    
+    // Add IP address if available
+    if (ipAddress != null) {
+      bodyData['ipAddress'] = ipAddress;
+      _debugLog('📡 Including IP address: $ipAddress');
+    }
+    
+    final body = jsonEncode(bodyData);
     
     _debugLog('📤 Request Headers: ${_maskApiKey(headers)}');
     _debugLog('📤 Request Body: $body');
@@ -81,9 +103,9 @@ class ReferralClient implements IReferralService {
   /// Call this once during app boot (e.g. in main or first screen initState).
   void startLinkListener() {
     _debugLog('🎧 Starting link listener for token-based deep links');
-    LinkListener.listenForToken((token) async {
-      _debugLog('🔗 Deep link token received: $token');
-      await _confirmByToken(token);
+    LinkListener.listenForToken((shortId) async {
+      _debugLog('🔗 Deep link token received: $shortId');
+      await _confirmByShortId(shortId);
     });
   }
 
@@ -95,11 +117,12 @@ class ReferralClient implements IReferralService {
     _debugLog('🎧 Starting link listener with full parameter access');
     LinkListener.listen((parameters) async {
       _debugLog('🔗 Deep link received with parameters: $parameters');
-      await handler(parameters);
+
+      // Ensure parameters is Map<String, String> as required by handler
+      final shortId = parameters != null ? parameters['segment_0'] ?? '' : '';
+      await handler(await confirmInstall(shortId: shortId));
     });
   }
-
-  /// Stop link listener (optional, e.g. on app dispose).
   Future<void> stopLinkListener() async {
     _debugLog('🛑 Stopping link listener');
     await LinkListener.dispose();
@@ -133,6 +156,20 @@ class ReferralClient implements IReferralService {
     return initialToken;
   }
 
+  /// Get the Chrome-style user agent string for external use
+  /// 
+  /// Returns a realistic browser user agent string for better API compatibility
+  Future<String> getUserAgent() async {
+    return await _getChromeStyleUserAgent();
+  }
+
+  /// Get the device's private IP address for external use
+  /// 
+  /// Returns the local network IP address if available
+  Future<String?> getPrivateIpAddress() async {
+    return await _getPrivateIpAddress();
+  }
+
   /// Call on first cold start after install (or every cold start, safe to repeat).
   /// - Android: reads Install Referrer and confirms with backend.
   /// - iOS: nothing to read (App Store doesn't provide), rely on link listener or fallback.
@@ -161,9 +198,9 @@ class ReferralClient implements IReferralService {
   }
 
   /// Low-level: explicitly confirm install using a known token (uniqueId/referrerId/shortId).
-  Future<Map<String, dynamic>?> confirmInstall({required String token}) async {
-    _debugLog('🔐 Confirming install with token: $token');
-    return await _confirmByToken(token);
+  Future<Map<String, dynamic>?> confirmInstall({required String shortId}) async {
+    _debugLog('🔐 Confirming install with shortId: $shortId');
+    return await _confirmByShortId(shortId);
   }
 
   @protected
@@ -210,6 +247,67 @@ class ReferralClient implements IReferralService {
     }
   }
 
+  @protected
+  Future<Map<String, dynamic>?> _confirmByShortId(String shortId) async {
+    _debugLog('🔐 Confirming install by shortId: $shortId');
+    _debugLog('📡 Backend URL: $backendBaseUrl/api/referrals/confirm-install');
+    
+    // final deviceId = await _deviceId();
+    // _debugLog('📱 Device ID: $deviceId');
+    
+    final uri = Uri.parse('$backendBaseUrl/api/referrals/confirm-install');
+    final userAgent = await _getChromeStyleUserAgent();
+    final ipAddress = await _getPrivateIpAddress();
+    
+    _debugLog('📱 User Agent: $userAgent');
+    if (ipAddress != null) {
+      _debugLog('📡 IP Address: $ipAddress');
+    }
+    
+    final headers = {
+      'Content-Type': 'application/json', 
+      'X-API-Key': key,
+      'User-Agent': userAgent,
+    };
+    
+    final bodyData = <String, dynamic>{
+      // Your backend can accept any of these (choose one to key on):
+      // - uniqueInstallId (Android Install Referrer unique token, if you use that)
+      // - referrerToken / referrerId (if you pass a plain code)
+      // - shortId (if you want to confirm by the clicked short code)
+      // This SDK sends a unified "referrerToken".
+      'shortId': shortId,
+      // 'deviceId': deviceId,
+    };
+    
+    // Add IP address if available
+    if (ipAddress != null) {
+      bodyData['ipAddress'] = ipAddress;
+    }
+
+    _debugLog('📤 Request Headers: ${_maskApiKey(headers)}');
+    _debugLog('📤 Request Body: $bodyData');
+
+    try {
+      final resp = await http.post(uri, headers: headers, body: jsonEncode(bodyData));
+      
+      _debugLog('📥 Response Status: ${resp.statusCode}');
+      _debugLog('📥 Response Headers: ${resp.headers}');
+      _debugLog('📥 Response Body: ${resp.body}');
+
+      if (resp.statusCode == 200) {
+        final result = jsonDecode(resp.body) as Map<String, dynamic>;
+        _debugLog('✅ Install confirmation successful: $result');
+        return result;
+      }
+      
+      _logHttpError('confirm-install', resp);
+      return null;
+    } catch (e) {
+      _debugLog('❌ Exception during install confirmation: $e');
+      rethrow;
+    }
+  }
   Future<String> _deviceId() async {
     _debugLog('📱 Getting device identifier');
     final info = DeviceInfoPlugin();
@@ -240,6 +338,67 @@ class ReferralClient implements IReferralService {
     } catch (e) {
       _debugLog('❌ Error getting device ID: $e');
       return 'unknown-device';
+    }
+  }
+
+  /// Generate a Chrome-style user agent string for better API compatibility
+  Future<String> _getChromeStyleUserAgent() async {
+    try {
+      final deviceInfo = DeviceInfoPlugin();
+      final package = await PackageInfo.fromPlatform();
+      String ua = "";
+
+      if (Platform.isAndroid) {
+        final android = await deviceInfo.androidInfo;
+        ua = "Mozilla/5.0 (Linux; Android ${android.version.release}; ${android.model}) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/${package.version}.0.0.0 Mobile Safari/537.36";
+        
+        _debugLog('🤖 Generated Android User-Agent: $ua');
+      } else if (Platform.isIOS) {
+        final ios = await deviceInfo.iosInfo;
+        ua = "Mozilla/5.0 (iPhone; CPU iPhone OS ${ios.systemVersion.replaceAll('.', '_')} like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+            "Version/15.0 Mobile/15E148 Safari/604.1 "
+            "Chrome/${package.version}.0.0.0";
+        
+        _debugLog('🍎 Generated iOS User-Agent: $ua');
+      } else {
+        ua = "Mozilla/5.0 (Unknown; Flutter App) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.0.0 Safari/537.36";
+        _debugLog('❓ Generated Unknown Platform User-Agent: $ua');
+      }
+
+      return ua;
+    } catch (e) {
+      _debugLog('❌ Error generating user agent: $e');
+      // Fallback to a generic Chrome user agent
+      return "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
+    }
+  }
+
+  /// Get the device's private IP address for network identification
+  Future<String?> _getPrivateIpAddress() async {
+    try {
+      final networkInfo = NetworkInfo();
+      final wifiIP = await networkInfo.getWifiIP();
+      
+      if (wifiIP != null && wifiIP.isNotEmpty) {
+        _debugLog('📡 WiFi IP Address: $wifiIP');
+        return wifiIP;
+      }
+      
+      // Fallback to any available IP
+      final ipAddress = await networkInfo.getWifiIP();
+      if (ipAddress != null && ipAddress.isNotEmpty) {
+        _debugLog('📡 IP Address: $ipAddress');
+        return ipAddress;
+      }
+      
+      _debugLog('ℹ️ No IP address available');
+      return null;
+    } catch (e) {
+      _debugLog('❌ Error getting IP address: $e');
+      return null;
     }
   }
 

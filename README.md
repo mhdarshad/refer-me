@@ -295,6 +295,55 @@ await ReferralService.init(
 - 🔗 Deep link parameter logging
 - ⚡ Performance tracking
 - 🛡️ Error handling with context
+- 🌐 Chrome-style user agent generation
+
+## 🌐 Chrome-Style User Agent
+
+Generate realistic browser user agent strings for better API compatibility:
+
+```dart
+// Get the generated user agent
+final userAgent = await referralService.getUserAgent();
+print('User Agent: $userAgent');
+
+// Example output (Android):
+// Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/1.0.0.0 Mobile Safari/537.36
+
+// Example output (iOS):
+// Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1 Chrome/1.0.0.0
+```
+
+**User Agent Features:**
+- 🤖 Platform-specific generation (Android/iOS)
+- 📱 Real device information integration
+- 🌐 Chrome/Safari compatibility
+- 🔄 Automatic API header inclusion
+- 📊 Backend analytics compatibility
+- 📡 Private IP address inclusion
+
+## 📡 Private IP Address
+
+Automatically include the device's local network IP address in API calls:
+
+```dart
+// Get the private IP address
+final ipAddress = await referralService.getPrivateIpAddress();
+if (ipAddress != null) {
+  print('Private IP: $ipAddress');
+  // Example: 192.168.1.100
+}
+
+// IP address is automatically included in all API calls
+await referralService.createShortLink(referrerId: 'USER123');
+// Request body will include: {"referrerId": "USER123", "ipAddress": "192.168.1.100"}
+```
+
+**IP Address Features:**
+- 📡 WiFi network detection
+- 🌐 Local network identification
+- 🔒 Private IP only (no public IP exposure)
+- 📊 Enhanced analytics and tracking
+- 🔄 Automatic API inclusion
 
 ## 📄 License
 
