@@ -191,8 +191,11 @@ void main() async {
 # iOS Simulator
 xcrun simctl openurl booted "referme://referral?token=TEST123"
 
-# Android Emulator
+# Android Device/Emulator
 adb shell am start -W -a android.intent.action.VIEW -d "referme://referral?token=TEST123" com.yourapp.package
+
+# If adb is not found, use the full path:
+/Users/mohammedarshad/Library/Android/sdk/platform-tools/adb shell am start -W -a android.intent.action.VIEW -d "referme://referral?token=TEST123" com.yourapp.package
 ```
 
 ### 3. Parameters Not Being Extracted
@@ -348,9 +351,16 @@ referralService.startLinkListenerWithParameters((parameters) async {
    ```
 
 2. **Test with ADB:**
-   ```bash
-   adb shell am start -W -a android.intent.action.VIEW -d "referme://referral?token=TEST123" com.yourapp.package
-   ```
+    ```bash
+    # Check if device is connected
+    adb devices
+    
+    # Test deep link
+    adb shell am start -W -a android.intent.action.VIEW -d "referme://referral?token=TEST123" com.yourapp.package
+    
+    # If adb is not found, use the full path:
+    /Users/mohammedarshad/Library/Android/sdk/platform-tools/adb shell am start -W -a android.intent.action.VIEW -d "referme://referral?token=TEST123" com.yourapp.package
+    ```
 
 ## Network and API Issues
 
@@ -543,6 +553,98 @@ test('should receive deep link parameters', () async {
 **Error:** `Exception: Invalid response format`
 
 **Solution:** Check API response format and handle errors appropriately.
+
+## ADB Setup Issues
+
+### ADB Command Not Found
+
+**Error:**
+```bash
+zsh: command not found: adb
+```
+
+**Cause:**
+Android Debug Bridge (ADB) is not installed or not in your PATH.
+
+**Solutions:**
+
+#### 1. Check if ADB is Installed
+
+```bash
+# Check if ADB exists in Android SDK
+find ~/Library/Android/sdk -name "adb" 2>/dev/null
+```
+
+#### 2. Add ADB to PATH
+
+If ADB is found but not in PATH, add it to your shell configuration:
+
+**For zsh (macOS):**
+```bash
+# Add to ~/.zshrc
+echo 'export PATH="$PATH:/Users/mohammedarshad/Library/Android/sdk/platform-tools"' >> ~/.zshrc
+
+# Reload shell configuration
+source ~/.zshrc
+```
+
+**For bash:**
+```bash
+# Add to ~/.bash_profile or ~/.bashrc
+echo 'export PATH="$PATH:/Users/mohammedarshad/Library/Android/sdk/platform-tools"' >> ~/.bash_profile
+source ~/.bash_profile
+```
+
+#### 3. Use Full Path
+
+If you can't modify PATH, use the full path to ADB:
+
+```bash
+/Users/mohammedarshad/Library/Android/sdk/platform-tools/adb devices
+/Users/mohammedarshad/Library/Android/sdk/platform-tools/adb shell am start -W -a android.intent.action.VIEW -d "referme://referral?token=TEST123" com.yourapp.package
+```
+
+#### 4. Verify ADB Installation
+
+```bash
+# Check ADB version
+adb version
+
+# List connected devices
+adb devices
+```
+
+### No Android Devices Connected
+
+**Error:**
+```bash
+List of devices attached
+# (no devices listed)
+```
+
+**Solutions:**
+
+1. **Enable Developer Options on Android Device:**
+   - Go to Settings > About Phone
+   - Tap "Build Number" 7 times
+   - Go to Settings > Developer Options
+   - Enable "USB Debugging"
+
+2. **Connect Device via USB:**
+   - Connect your Android device to your computer
+   - Allow USB debugging when prompted on device
+
+3. **Check USB Connection:**
+   ```bash
+   adb devices
+   ```
+
+4. **Restart ADB Server:**
+   ```bash
+   adb kill-server
+   adb start-server
+   adb devices
+   ```
 
 ## Getting Help
 
