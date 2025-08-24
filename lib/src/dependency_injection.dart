@@ -7,11 +7,12 @@ final GetIt getIt = GetIt.instance;
 /// Configuration class for dependency injection
 class ReferralService {
   /// Initialize all dependencies
-  static Future<void> init({required String apiKey}) async {
+  static Future<void> init({required String apiKey, bool debugMode = false}) async {
     // Register ReferralClient as a singleton with interface
     getIt.registerLazySingleton<IReferralService>(
       () => ReferralClient(
         key: apiKey,
+        debugMode: debugMode,
       ),
     );
   }

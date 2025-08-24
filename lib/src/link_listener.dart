@@ -62,6 +62,7 @@ class LinkListener {
   /// Looks for token in parameters: uid, ref, code, token, referral
   static void listenForToken(TokenHandler handler) {
     listen((parameters) async {
+      print(parameters);
       // Look for token in common parameter names
       final token = parameters['uid'] ?? 
                     parameters['ref'] ?? 

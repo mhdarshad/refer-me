@@ -6,6 +6,7 @@ A comprehensive Flutter SDK for implementing referral systems with deep link han
 
 - **🔗 Deep Link Handling**: Full app_links integration with parameter extraction
 - **💉 Dependency Injection**: Built-in DI with get_it for better testability
+- **🔧 Debug Mode**: Comprehensive logging for development and troubleshooting
 - **📱 Cross-Platform**: iOS and Android support with Universal Links
 - **🔗 Short Link Generation**: Create branded referral links for your users
 - **📊 Install Attribution**: Post-install attribution via Play Store Install Referrer
@@ -33,8 +34,11 @@ import 'package:refer_me/refer_me.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize dependency injection
-  await ReferralService.init(apiKey: 'your_api_key_here');
+  // Initialize dependency injection with debug mode
+  await ReferralService.init(
+    apiKey: 'your_api_key_here',
+    debugMode: true, // Enable debug logging
+  );
   
   final referralService = ReferralService.referralService;
 
@@ -260,10 +264,37 @@ Add to `android/app/src/main/AndroidManifest.xml`:
 ## 🚀 Getting Started
 
 1. **Install the package**: Add `refer_me: ^0.1.0` to your `pubspec.yaml`
-2. **Initialize DI**: Call `ReferralService.init(apiKey: 'your_key')`
+2. **Initialize DI**: Call `ReferralService.init(apiKey: 'your_key', debugMode: true)`
 3. **Setup deep links**: Configure platform-specific deep link handling
 4. **Start listening**: Use `startLinkListenerWithParameters()` for full control
 5. **Generate links**: Create referral links with `createShortLink()`
+
+## 🔧 Debug Mode
+
+Enable comprehensive logging for development and troubleshooting:
+
+```dart
+// Development with full logging
+await ReferralService.init(
+  apiKey: 'your_api_key',
+  debugMode: true, // Shows all operations, requests, and responses
+);
+
+// Production with no logging
+await ReferralService.init(
+  apiKey: 'your_api_key',
+  debugMode: false, // Silent operation (default)
+);
+```
+
+**Debug Mode Features:**
+- 🔍 Detailed operation logging
+- 📡 HTTP request/response logging
+- 🔐 Secure API key masking
+- 📱 Device information logging
+- 🔗 Deep link parameter logging
+- ⚡ Performance tracking
+- 🛡️ Error handling with context
 
 ## 📄 License
 

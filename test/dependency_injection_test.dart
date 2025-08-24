@@ -13,13 +13,28 @@ void main() {
       await ReferralService.reset();
     });
 
-    test('should initialize dependency injection', () async {
-      // Act
-      await ReferralService.init(apiKey: 'test_api_key');
+      test('should initialize dependency injection', () async {
+    // Act
+    await ReferralService.init(apiKey: 'test_api_key');
 
-      // Assert
-      expect(getIt.isRegistered<IReferralService>(), isTrue);
-    });
+    // Assert
+    expect(getIt.isRegistered<IReferralService>(), isTrue);
+  });
+
+  test('should initialize dependency injection with debug mode', () async {
+    // Act
+    await ReferralService.init(apiKey: 'test_api_key', debugMode: true);
+
+    // Assert
+    expect(getIt.isRegistered<IReferralService>(), isTrue);
+    
+    // Get the service and verify debug mode is enabled
+    final service = getIt.get<IReferralService>();
+    expect(service, isA<ReferralClient>());
+    
+    final client = service as ReferralClient;
+    expect(client.debugMode, isTrue);
+  });
 
     test('should get referral service from service locator', () async {
       // Arrange
