@@ -1,15 +1,17 @@
-# Referral Client Usage Examples
+# Refer Me Usage Examples
 
-This document provides comprehensive examples of how to use the `referral_client` package in your Flutter applications.
+This document provides comprehensive examples of how to use the `refer_me` package in your Flutter applications with dependency injection and app_links deep link handling.
 
 ## Table of Contents
 
 1. [Basic Setup](#basic-setup)
-2. [Simple Usage](#simple-usage)
-3. [Advanced Usage](#advanced-usage)
-4. [Error Handling](#error-handling)
-5. [Integration Patterns](#integration-patterns)
-6. [Testing](#testing)
+2. [Dependency Injection](#dependency-injection)
+3. [Deep Link Handling](#deep-link-handling)
+4. [Simple Usage](#simple-usage)
+5. [Advanced Usage](#advanced-usage)
+6. [Error Handling](#error-handling)
+7. [Integration Patterns](#integration-patterns)
+8. [Testing](#testing)
 
 ## Basic Setup
 
@@ -17,35 +19,255 @@ This document provides comprehensive examples of how to use the `referral_client
 
 ```yaml
 dependencies:
-  referral_client:
-    path: ../referral_client  # or git: https://github.com/your-repo/referral_client
+  refer_me: ^0.1.0
 ```
 
-### 2. Initialize in main.dart
+### 2. Initialize with Dependency Injection
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:referral_client/refer_me.dart';
-
-late final ReferralClient referral;
+import 'package:refer_me/refer_me.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize the referral client
-  referral = ReferralClient(
-    backendBaseUrl: 'https://api.yourdomain.com',
-    androidPackage: 'com.yourapp',
-    appStoreId: '1234567890',
-  );
+  // Initialize dependency injection
+  await ReferralService.init(apiKey: 'your_api_key_here');
+  
+  final referralService = ReferralService.referralService;
 
-  // Start listening for deep links
-  referral.startLinkListener();
+  // Start listening for deep links with full parameter access
+  referralService.startLinkListenerWithParameters((parameters) async {
+    print('Deep link received: $parameters');
+    
+    // Extract token and handle referral
+    final token = parameters['uid'] ?? 
+                  parameters['ref'] ?? 
+                  parameters['code'] ?? 
+                  parameters['token'] ?? 
+                  parameters['referral'];
+    
+    if (token != null) {
+      await referralService.confirmInstall(token: token);
+    }
+  });
+
+  // Check for initial link that launched the app
+  final initialLink = await referralService.getInitialLink();
+  if (initialLink != null) {
+    print('App launched via deep link: $initialLink');
+  }
 
   // Check for install referrer
-  await referral.confirmInstallIfPossible();
+  await referralService.confirmInstallIfPossible();
 
-  runApp(const MyApp());
+  runApp(MyApp());
+}
+```
+
+## Dependency Injection
+
+### Service Locator Pattern
+
+```dart
+class MyService {
+  void doSomething() {
+    // Get the referral service from the service locator
+    final referralService = ReferralService.referralService;
+    
+    // Use the service
+    referralService.createShortLink(referrerId: 'USER123');
+  }
+}
+```
+
+### Constructor Injection (Recommended)
+
+```dart
+class ReferralManager {
+  final IReferralService _referralService;
+
+  ReferralManager(this._referralService);
+
+  Future<String?> generateLink(String userId) async {
+    return await _referralService.createShortLink(referrerId: userId);
+  }
+}
+
+// Usage
+final manager = ReferralManager(ReferralService.referralService);
+```
+
+### Custom Configuration
+
+```dart
+class ReferralConfiguration {
+  static Future<void> initializeWithConfig({
+    required String apiKey,
+    String? baseUrl,
+  }) async {
+    // Reset existing dependencies
+    await ReferralService.reset();
+    
+    // Register with custom configuration
+    getIt.registerLazySingleton<IReferralService>(
+      () => ReferralClient(key: apiKey),
+    );
+  }
+}
+
+// Usage
+await ReferralConfiguration.initializeWithConfig(
+  apiKey: 'your_custom_api_key',
+);
+```
+
+## Deep Link Handling
+
+### Basic Deep Link Listening
+
+```dart
+void setupDeepLinkListening() {
+  final referralService = ReferralService.referralService;
+  
+  referralService.startLinkListenerWithParameters((parameters) async {
+    print('Deep link received: $parameters');
+    
+    // Handle the deep link
+    await handleDeepLink(parameters);
+  });
+}
+
+Future<void> handleDeepLink(Map<String, String> parameters) async {
+  // Extract common referral parameters
+  final token = parameters['uid'] ?? 
+                parameters['ref'] ?? 
+                parameters['code'] ?? 
+                parameters['token'] ?? 
+                parameters['referral'];
+  
+  final campaign = parameters['campaign'];
+  final source = parameters['source'];
+  final medium = parameters['medium'];
+  
+  // Handle referral token
+  if (token != null) {
+    final referralService = ReferralService.referralService;
+    final result = await referralService.confirmInstall(token: token);
+    
+    if (result != null) {
+      print('Referral confirmed: $result');
+      // Show reward UI or handle referral
+    }
+  }
+  
+  // Handle campaign tracking
+  if (campaign != null) {
+    print('Campaign: $campaign from $source via $medium');
+    // Track campaign analytics
+  }
+}
+```
+
+### Advanced Deep Link Routing
+
+```dart
+class DeepLinkRouter {
+  final IReferralService _referralService;
+  
+  DeepLinkRouter(this._referralService);
+  
+  void startListening() {
+    _referralService.startLinkListenerWithParameters((parameters) async {
+      await routeDeepLink(parameters);
+    });
+  }
+  
+  Future<void> routeDeepLink(Map<String, String> parameters) async {
+    final path = parameters['path'];
+    final action = parameters['action'];
+    
+    switch (path) {
+      case '/referral':
+        await handleReferral(parameters);
+        break;
+      case '/campaign':
+        await handleCampaign(parameters);
+        break;
+      case '/invite':
+        await handleInvite(parameters);
+        break;
+      case '/share':
+        await handleShare(parameters);
+        break;
+      default:
+        await handleDefault(parameters);
+    }
+  }
+  
+  Future<void> handleReferral(Map<String, String> parameters) async {
+    final token = parameters['token'] ?? parameters['code'];
+    if (token != null) {
+      await _referralService.confirmInstall(token: token);
+    }
+  }
+  
+  Future<void> handleCampaign(Map<String, String> parameters) async {
+    final campaignId = parameters['id'];
+    final source = parameters['source'];
+    
+    print('Campaign: $campaignId from $source');
+    // Implement campaign tracking
+  }
+  
+  Future<void> handleInvite(Map<String, String> parameters) async {
+    final inviteCode = parameters['code'];
+    final inviterId = parameters['inviter'];
+    
+    print('Invite: $inviteCode from $inviterId');
+    // Implement invite logic
+  }
+  
+  Future<void> handleShare(Map<String, String> parameters) async {
+    final userId = parameters['user'];
+    final message = parameters['message'];
+    
+    if (userId != null) {
+      final link = await _referralService.createShortLink(referrerId: userId);
+      print('Share: $link with message: $message');
+    }
+  }
+  
+  Future<void> handleDefault(Map<String, String> parameters) async {
+    print('Default handling: $parameters');
+  }
+}
+```
+
+### Initial Link Detection
+
+```dart
+Future<void> checkInitialLink() async {
+  final referralService = ReferralService.referralService;
+  
+  // Get initial link parameters
+  final initialParameters = await referralService.getInitialLink();
+  if (initialParameters != null) {
+    print('App was launched via deep link!');
+    print('Initial link parameters: $initialParameters');
+    
+    // Handle the initial link
+    await handleDeepLink(initialParameters);
+  } else {
+    print('App was launched normally (no deep link)');
+  }
+  
+  // Get initial token specifically
+  final initialToken = await referralService.getInitialToken();
+  if (initialToken != null) {
+    print('Initial token found: $initialToken');
+    await processReferralToken(initialToken);
+  }
 }
 ```
 
@@ -56,7 +278,8 @@ void main() async {
 ```dart
 Future<void> generateReferralLink(String userId) async {
   try {
-    final shortLink = await referral.createShortLink(referrerId: userId);
+    final referralService = ReferralService.referralService;
+    final shortLink = await referralService.createShortLink(referrerId: userId);
     
     if (shortLink != null) {
       print('Generated referral link: $shortLink');
@@ -74,7 +297,8 @@ Future<void> generateReferralLink(String userId) async {
 
 ```dart
 Future<void> shareReferralLink(String userId) async {
-  final shortLink = await referral.createShortLink(referrerId: userId);
+  final referralService = ReferralService.referralService;
+  final shortLink = await referralService.createShortLink(referrerId: userId);
   
   if (shortLink != null) {
     // Using share_plus package
@@ -91,45 +315,122 @@ Future<void> shareReferralLink(String userId) async {
 ```dart
 Future<void> confirmReferral(String token) async {
   try {
-    final result = await referral.confirmInstall(token: token);
+    final referralService = ReferralService.referralService;
+    final result = await referralService.confirmInstall(token: token);
     
     if (result != null) {
       print('Referral confirmed!');
-      print('Referral code: ${result['referralCode']}');
+      print('Referral data: $result');
     } else {
       print('Failed to confirm referral');
     }
   } catch (e) {
-    print('Error: $e');
+    print('Error confirming referral: $e');
   }
 }
 ```
 
 ## Advanced Usage
 
-### User Referral Manager
+### Widget Integration
+
+```dart
+class ReferralWidget extends StatefulWidget {
+  @override
+  _ReferralWidgetState createState() => _ReferralWidgetState();
+}
+
+class _ReferralWidgetState extends State<ReferralWidget> {
+  late final IReferralService _referralService;
+  late final DeepLinkRouter _router;
+  
+  @override
+  void initState() {
+    super.initState();
+    _referralService = ReferralService.referralService;
+    _router = DeepLinkRouter(_referralService);
+    _router.startListening();
+  }
+  
+  @override
+  void dispose() {
+    _referralService.stopLinkListener();
+    super.dispose();
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton(
+      onPressed: _shareReferralLink,
+      child: Text('Share Referral Link'),
+    );
+  }
+  
+  Future<void> _shareReferralLink() async {
+    final link = await _referralService.createShortLink(referrerId: 'USER123');
+    if (link != null) {
+      // Share the link
+      print('Share: $link');
+    }
+  }
+}
+```
+
+### Campaign Tracking
+
+```dart
+class CampaignTracker {
+  final IReferralService _referralService;
+  
+  CampaignTracker(this._referralService);
+  
+  Future<void> trackCampaign(Map<String, String> parameters) async {
+    final campaignId = parameters['campaign'];
+    final source = parameters['source'];
+    final medium = parameters['medium'];
+    final term = parameters['term'];
+    
+    if (campaignId != null) {
+      print('Tracking campaign: $campaignId');
+      print('Source: $source, Medium: $medium, Term: $term');
+      
+      // Implement your campaign tracking logic here
+      // This could involve analytics, user segmentation, etc.
+      
+      await _logCampaignEvent(campaignId, source, medium, term);
+    }
+  }
+  
+  Future<void> _logCampaignEvent(String campaign, String? source, String? medium, String? term) async {
+    // Log campaign event to your analytics service
+    print('Campaign event logged: $campaign from $source via $medium');
+  }
+}
+```
+
+### User Referral Management
 
 ```dart
 class UserReferralManager {
-  final ReferralClient referral;
+  final IReferralService _referralService;
   final String userId;
 
-  UserReferralManager(this.referral, this.userId);
+  UserReferralManager(this._referralService, this.userId);
 
-  /// Generate referral link for user
-  Future<String?> generateReferralLink() async {
-    return await referral.createShortLink(referrerId: userId);
+  /// Generate and store referral link for user
+  Future<String?> generateUserReferralLink() async {
+    return await _referralService.createShortLink(referrerId: userId);
   }
 
   /// Check if user was referred
-  Future<bool> wasReferred() async {
-    final result = await referral.confirmInstallIfPossible();
+  Future<bool> checkIfUserWasReferred() async {
+    final result = await _referralService.confirmInstallIfPossible();
     return result != null;
   }
 
   /// Get referral information
   Future<Map<String, dynamic>?> getReferralInfo() async {
-    return await referral.confirmInstallIfPossible();
+    return await _referralService.confirmInstallIfPossible();
   }
 
   /// Handle deep link manually
@@ -140,429 +441,347 @@ class UserReferralManager {
                   uri.queryParameters['code'];
     
     if (token != null) {
-      await referral.confirmInstall(token: token);
+      await _referralService.confirmInstall(token: token);
     }
-  }
-}
-```
-
-### Referral Analytics
-
-```dart
-class ReferralAnalytics {
-  final ReferralClient referral;
-
-  ReferralAnalytics(this.referral);
-
-  /// Track referral generation
-  Future<void> trackReferralGenerated(String userId) async {
-    final link = await referral.createShortLink(referrerId: userId);
-    
-    if (link != null) {
-      // Send analytics event
-      await _sendAnalyticsEvent('referral_generated', {
-        'userId': userId,
-        'link': link,
-        'timestamp': DateTime.now().toIso8601String(),
-      });
-    }
-  }
-
-  /// Track referral confirmation
-  Future<void> trackReferralConfirmed(Map<String, dynamic> result) async {
-    await _sendAnalyticsEvent('referral_confirmed', {
-      'referralCode': result['referralCode'],
-      'deviceId': result['deviceId'],
-      'timestamp': DateTime.now().toIso8601String(),
-    });
-  }
-
-  Future<void> _sendAnalyticsEvent(String event, Map<String, dynamic> data) async {
-    // Implement your analytics tracking here
-    print('Analytics: $event - $data');
   }
 }
 ```
 
 ## Error Handling
 
-### Robust Error Handling
+### Comprehensive Error Handling
 
 ```dart
-class ReferralErrorHandler {
-  final ReferralClient referral;
+class ReferralErrorHandling {
+  final IReferralService _referralService;
 
-  ReferralErrorHandler(this.referral);
+  ReferralErrorHandling(this._referralService);
 
-  /// Generate link with retry logic
-  Future<String?> generateLinkWithRetry(String referrerId, {int maxRetries = 3}) async {
-    for (int i = 0; i < maxRetries; i++) {
-      try {
-        return await referral.createShortLink(referrerId: referrerId);
-      } catch (e) {
-        print('Attempt ${i + 1} failed: $e');
-        
-        if (i == maxRetries - 1) {
-          // Log final failure
-          _logError('generate_link_failed', e);
-          return null;
-        }
-        
-        // Wait before retry (exponential backoff)
-        await Future.delayed(Duration(seconds: 1 << i));
-      }
-    }
-    return null;
-  }
-
-  /// Confirm install with error handling
-  Future<Map<String, dynamic>?> confirmInstallSafely(String token) async {
+  /// Generate link with proper error handling
+  Future<String?> generateLinkSafely(String referrerId) async {
     try {
-      return await referral.confirmInstall(token: token);
+      return await _referralService.createShortLink(referrerId: referrerId);
     } catch (e) {
-      _logError('confirm_install_failed', e);
+      // Log the error
+      print('Error generating referral link: $e');
+      
+      // Return null or throw custom exception
       return null;
     }
   }
 
-  void _logError(String type, dynamic error) {
-    // Implement error logging
-    print('Error [$type]: $error');
+  /// Confirm install with retry logic
+  Future<Map<String, dynamic>?> confirmInstallWithRetry(String token, {int maxRetries = 3}) async {
+    for (int i = 0; i < maxRetries; i++) {
+      try {
+        final result = await _referralService.confirmInstall(token: token);
+        return result;
+      } catch (e) {
+        print('Attempt ${i + 1} failed: $e');
+        if (i == maxRetries - 1) {
+          rethrow;
+        }
+        // Wait before retry
+        await Future.delayed(Duration(seconds: 1 << i)); // Exponential backoff
+      }
+    }
+    return null;
   }
 }
 ```
 
-### Network Error Handling
+### Deep Link Error Handling
 
 ```dart
-class NetworkAwareReferral {
-  final ReferralClient referral;
-
-  NetworkAwareReferral(this.referral);
-
-  /// Check network connectivity before making requests
-  Future<String?> generateLinkWithNetworkCheck(String referrerId) async {
-    if (!await _isNetworkAvailable()) {
-      throw Exception('No network connection');
+void startDeepLinkListening() {
+  final referralService = ReferralService.referralService;
+  
+  referralService.startLinkListenerWithParameters((parameters) async {
+    try {
+      await handleDeepLink(parameters);
+    } catch (e) {
+      print('Error handling deep link: $e');
+      // Handle error gracefully
     }
+  });
+}
 
-    return await referral.createShortLink(referrerId: referrerId);
+Future<void> handleDeepLink(Map<String, String> parameters) async {
+  // Validate parameters
+  if (!DeepLinkConfig.isSupportedLink(parameters)) {
+    print('Unsupported deep link: $parameters');
+    return;
   }
-
-  Future<bool> _isNetworkAvailable() async {
-    // Implement network connectivity check
-    // You can use connectivity_plus package
-    return true; // Placeholder
+  
+  // Extract and validate token
+  final token = DeepLinkConfig.extractToken(parameters);
+  if (token == null) {
+    print('No valid token found in deep link');
+    return;
+  }
+  
+  // Process the deep link
+  final referralService = ReferralService.referralService;
+  final result = await referralService.confirmInstall(token: token);
+  
+  if (result != null) {
+    print('Deep link processed successfully: $result');
+  } else {
+    print('Failed to process deep link');
   }
 }
 ```
 
 ## Integration Patterns
 
-### State Management Integration
+### Service Integration
 
 ```dart
-// Using Provider
-class ReferralProvider extends ChangeNotifier {
-  final ReferralClient referral;
-  String? _referralLink;
-  bool _isLoading = false;
-  String? _error;
-
-  ReferralProvider(this.referral);
-
-  String? get referralLink => _referralLink;
-  bool get isLoading => _isLoading;
-  String? get error => _error;
-
-  Future<void> generateReferralLink(String userId) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      _referralLink = await referral.createShortLink(referrerId: userId);
-    } catch (e) {
-      _error = e.toString();
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-}
-
-// Using Riverpod
-final referralProvider = StateNotifierProvider<ReferralNotifier, ReferralState>((ref) {
-  return ReferralNotifier(ReferralClient(
-    backendBaseUrl: 'https://api.yourdomain.com',
-    androidPackage: 'com.yourapp',
-    appStoreId: '1234567890',
-  ));
-});
-
-class ReferralState {
-  final String? referralLink;
-  final bool isLoading;
-  final String? error;
-
-  ReferralState({
-    this.referralLink,
-    this.isLoading = false,
-    this.error,
-  });
-}
-
-class ReferralNotifier extends StateNotifier<ReferralState> {
-  final ReferralClient referral;
-
-  ReferralNotifier(this.referral) : super(ReferralState());
-
-  Future<void> generateReferralLink(String userId) async {
-    state = ReferralState(isLoading: true);
-
-    try {
-      final link = await referral.createShortLink(referrerId: userId);
-      state = ReferralState(referralLink: link);
-    } catch (e) {
-      state = ReferralState(error: e.toString());
+class AppService {
+  final IReferralService _referralService;
+  final AnalyticsService _analytics;
+  final UserService _userService;
+  
+  AppService(this._referralService, this._analytics, this._userService);
+  
+  Future<void> handleReferralFlow() async {
+    // Check if user was referred
+    final referralInfo = await _referralService.confirmInstallIfPossible();
+    
+    if (referralInfo != null) {
+      // Track referral event
+      await _analytics.trackEvent('referral_received', {
+        'referral_code': referralInfo['referralCode'],
+        'device_id': referralInfo['deviceId'],
+      });
+      
+      // Update user profile
+      await _userService.updateReferralInfo(referralInfo);
+      
+      // Show referral reward UI
+      showReferralReward(referralInfo);
     }
   }
 }
 ```
 
-### Widget Integration
+### State Management Integration
 
 ```dart
-class ReferralWidget extends StatefulWidget {
-  final String userId;
-
-  const ReferralWidget({super.key, required this.userId});
-
-  @override
-  State<ReferralWidget> createState() => _ReferralWidgetState();
-}
-
-class _ReferralWidgetState extends State<ReferralWidget> {
-  String? _referralLink;
-  bool _isLoading = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        ElevatedButton(
-          onPressed: _isLoading ? null : _generateLink,
-          child: _isLoading 
-            ? const CircularProgressIndicator()
-            : const Text('Generate Referral Link'),
-        ),
-        if (_referralLink != null) ...[
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Your Referral Link:'),
-                const SizedBox(height: 8),
-                SelectableText(_referralLink!),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => _copyToClipboard(_referralLink!),
-                        child: const Text('Copy'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => _shareLink(_referralLink!),
-                        child: const Text('Share'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
+class ReferralBloc extends Bloc<ReferralEvent, ReferralState> {
+  final IReferralService _referralService;
+  
+  ReferralBloc(this._referralService) : super(ReferralInitial()) {
+    on<GenerateReferralLink>(_onGenerateReferralLink);
+    on<ConfirmReferral>(_onConfirmReferral);
+    on<CheckReferralStatus>(_onCheckReferralStatus);
   }
-
-  Future<void> _generateLink() async {
-    setState(() => _isLoading = true);
-
+  
+  Future<void> _onGenerateReferralLink(
+    GenerateReferralLink event,
+    Emitter<ReferralState> emit,
+  ) async {
+    emit(ReferralLoading());
+    
     try {
-      final link = await referral.createShortLink(referrerId: widget.userId);
-      setState(() => _referralLink = link);
+      final link = await _referralService.createShortLink(referrerId: event.userId);
+      emit(ReferralLinkGenerated(link));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    } finally {
-      setState(() => _isLoading = false);
+      emit(ReferralError(e.toString()));
     }
   }
-
-  void _copyToClipboard(String text) {
-    Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Copied to clipboard')),
-    );
+  
+  Future<void> _onConfirmReferral(
+    ConfirmReferral event,
+    Emitter<ReferralState> emit,
+  ) async {
+    emit(ReferralLoading());
+    
+    try {
+      final result = await _referralService.confirmInstall(token: event.token);
+      emit(ReferralConfirmed(result));
+    } catch (e) {
+      emit(ReferralError(e.toString()));
+    }
   }
-
-  void _shareLink(String link) {
-    Share.share('Check out this app! $link');
+  
+  Future<void> _onCheckReferralStatus(
+    CheckReferralStatus event,
+    Emitter<ReferralState> emit,
+  ) async {
+    emit(ReferralLoading());
+    
+    try {
+      final result = await _referralService.confirmInstallIfPossible();
+      if (result != null) {
+        emit(ReferralConfirmed(result));
+      } else {
+        emit(ReferralNotConfirmed());
+      }
+    } catch (e) {
+      emit(ReferralError(e.toString()));
+    }
   }
 }
 ```
 
 ## Testing
 
-### Unit Tests
+### Mock Service Setup
 
 ```dart
-import 'package:flutter_test/flutter_test.dart';
-import 'package:referral_client/refer_me.dart';
+void setUp() async {
+  // Reset dependencies
+  await ReferralService.reset();
+  
+  // Register mock service
+  getIt.registerLazySingleton<IReferralService>(
+    () => MockReferralService(),
+  );
+}
 
-void main() {
-  group('ReferralClient', () {
-    late ReferralClient client;
+void tearDown() async {
+  // Clean up
+  await ReferralService.reset();
+}
 
-    setUp(() {
-      client = ReferralClient(
-        backendBaseUrl: 'https://api.example.com',
-        androidPackage: 'com.example.app',
-        appStoreId: '1234567890',
-      );
-    });
+class MockReferralService implements IReferralService {
+  @override
+  Future<String?> createShortLink({required String referrerId}) async {
+    return 'https://test.com/ref/$referrerId';
+  }
 
-    test('should be created with correct parameters', () {
-      expect(client.backendBaseUrl, 'https://api.example.com');
-      expect(client.androidPackage, 'com.example.app');
-      expect(client.appStoreId, '1234567890');
-    });
+  @override
+  void startLinkListener() {
+    // Mock implementation
+  }
 
-    test('should generate referral link', () async {
-      // Mock the HTTP response
-      // You can use http_mock_adapter or similar
-      
-      final link = await client.createShortLink(referrerId: 'USER123');
-      expect(link, isNotNull);
-    });
+  @override
+  void startLinkListenerWithParameters(DeepLinkHandler handler) {
+    // Mock implementation
+  }
+
+  @override
+  Future<void> stopLinkListener() async {
+    // Mock implementation
+  }
+
+  @override
+  Future<Map<String, dynamic>?> confirmInstallIfPossible() async {
+    return {'referralCode': 'TEST123', 'deviceId': 'test-device'};
+  }
+
+  @override
+  Future<Map<String, dynamic>?> confirmInstall({required String token}) async {
+    return {'referralCode': 'TEST123', 'deviceId': 'test-device'};
+  }
+
+  @override
+  Future<Map<String, String>?> getInitialLink() async {
+    return {'path': '/test', 'token': 'TEST123'};
+  }
+
+  @override
+  Future<String?> getInitialToken() async {
+    return 'TEST123';
+  }
+}
+```
+
+### Test Examples
+
+```dart
+test('should generate referral link', () async {
+  final manager = ReferralManager(getIt.get<IReferralService>());
+  final link = await manager.generateUserReferralLink('USER123');
+  
+  expect(link, equals('https://test.com/ref/USER123'));
+});
+
+test('should handle deep link parameters', () async {
+  final parameters = {
+    'path': '/referral',
+    'token': 'TEST123',
+    'source': 'email',
+    'campaign': 'winter2024'
+  };
+  
+  await handleDeepLink(parameters);
+  
+  // Verify the behavior
+});
+
+test('should confirm referral with retry', () async {
+  final errorHandler = ReferralErrorHandling(getIt.get<IReferralService>());
+  final result = await errorHandler.confirmInstallWithRetry('TEST123');
+  
+  expect(result, isNotNull);
+  expect(result!['referralCode'], equals('TEST123'));
+});
+```
+
+### Integration Testing
+
+```dart
+testWidgets('should handle deep link in widget', (WidgetTester tester) async {
+  await tester.pumpWidget(MyApp());
+  
+  // Simulate deep link
+  final parameters = {'token': 'TEST123', 'source': 'email'};
+  await handleDeepLink(parameters);
+  
+  await tester.pump();
+  
+  // Verify UI updates
+  expect(find.text('Referral Confirmed'), findsOneWidget);
+});
+```
+
+## Platform-Specific Examples
+
+### iOS Universal Links
+
+```dart
+// iOS Info.plist configuration
+// Add Associated Domains capability
+// Add apple-app-site-association file to your domain
+
+// Handle Universal Links
+void setupUniversalLinks() {
+  final referralService = ReferralService.referralService;
+  
+  referralService.startLinkListenerWithParameters((parameters) async {
+    // Handle Universal Link parameters
+    final token = parameters['token'];
+    final campaign = parameters['campaign'];
+    
+    if (token != null) {
+      await referralService.confirmInstall(token: token);
+    }
   });
 }
 ```
 
-### Integration Tests
+### Android App Links
 
 ```dart
-import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
+// Android AndroidManifest.xml configuration
+// Add intent filters for your domain
 
-void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-
-  group('Referral Integration Tests', () {
-    testWidgets('should generate and display referral link', (tester) async {
-      // Build the app
-      await tester.pumpWidget(const MyApp());
-
-      // Enter user ID
-      await tester.enterText(
-        find.byType(TextField),
-        'USER123',
-      );
-
-      // Tap generate button
-      await tester.tap(find.text('Generate Referral Link'));
-      await tester.pumpAndSettle();
-
-      // Verify link is displayed
-      expect(find.textContaining('https://'), findsOneWidget);
-    });
+// Handle App Links
+void setupAppLinks() {
+  final referralService = ReferralService.referralService;
+  
+  referralService.startLinkListenerWithParameters((parameters) async {
+    // Handle App Link parameters
+    final token = parameters['token'];
+    final source = parameters['source'];
+    
+    if (token != null) {
+      await referralService.confirmInstall(token: token);
+    }
   });
 }
 ```
 
-## Platform-Specific Setup
-
-### Android Setup
-
-1. **Add to AndroidManifest.xml**:
-```xml
-<activity android:name=".MainActivity">
-  <intent-filter android:autoVerify="true">
-    <action android:name="android.intent.action.VIEW" />
-    <category android:name="android.intent.category.DEFAULT" />
-    <category android:name="android.intent.category.BROWSABLE" />
-    <data android:scheme="https" android:host="yourdomain.com" />
-  </intent-filter>
-</activity>
-```
-
-2. **Play Store Setup**:
-   - Configure your Play Store redirect URL to include the referrer parameter
-   - Example: `https://play.google.com/store/apps/details?id=com.yourapp&referrer=uniqueId=UUIDv4`
-
-### iOS Setup
-
-1. **Add to Info.plist**:
-```xml
-<key>CFBundleURLTypes</key>
-<array>
-  <dict>
-    <key>CFBundleURLName</key>
-    <string>yourdomain.com</string>
-    <key>CFBundleURLSchemes</key>
-    <array>
-      <string>yourapp</string>
-    </array>
-  </dict>
-</array>
-```
-
-2. **Associated Domains**:
-   - Add `applinks:yourdomain.com` to your Associated Domains capability
-   - Create `apple-app-site-association` file on your domain
-
-## Best Practices
-
-1. **Initialize Early**: Initialize the referral client in `main()` before running the app
-2. **Handle Errors**: Always wrap API calls in try-catch blocks
-3. **User Experience**: Show loading states and provide feedback
-4. **Analytics**: Track referral events for insights
-5. **Testing**: Test on real devices, especially for deep links
-6. **Security**: Validate tokens and implement rate limiting on your backend
-7. **Privacy**: Follow platform guidelines for user data handling
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Deep links not working**:
-   - Check Associated Domains setup (iOS)
-   - Verify intent filters (Android)
-   - Test with real devices
-
-2. **Install referrer not found**:
-   - Ensure Play Store redirect includes referrer parameter
-   - Check that the app was installed via the Play Store link
-
-3. **Network errors**:
-   - Verify backend URL is correct
-   - Check network connectivity
-   - Implement retry logic
-
-4. **Platform-specific issues**:
-   - iOS: Check Universal Links setup
-   - Android: Verify Install Referrer permissions
-
-For more detailed examples, see the `example/` directory in the package repository.
+This comprehensive guide covers all aspects of using the Refer Me package with dependency injection and app_links deep link handling.
